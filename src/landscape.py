@@ -44,17 +44,17 @@ def createEmptyImage(
     return np.zeros((num_rows,num_cols))
 
 
-def gradient2D(landscape,count):
+def gradient2D(landscape,dist):
     landscape_tree = KDTree(landscape)
     start = time.time()
     new_landscape = []
 
-    prev_landscape = np.copy(landscape)
-    pcd_prev = o3d.geometry.PointCloud()
-    pcd_prev.points = o3d.utility.Vector3dVector(prev_landscape)
-    o3d.visualization.draw_geometries([pcd_prev])
+    # prev_landscape = np.copy(landscape)
+    # pcd_prev = o3d.geometry.PointCloud()
+    # pcd_prev.points = o3d.utility.Vector3dVector(prev_landscape)
+    # o3d.visualization.draw_geometries([pcd_prev])
 
-    image = createEmptyImage(extent=4,resolution=0.1)
+    image = createEmptyImage(extent=dist,resolution=0.1)
 
     for i in range(len(landscape)):
         point = landscape[i]
@@ -70,22 +70,26 @@ def gradient2D(landscape,count):
         getGradient(point,closest)
         new_landscape.append([point[0],point[1],getGradient(point,closest)])
 
-        row,col = cart2Im(cartX=point[0],cartY=point[1],extent=[4,4],resolution=0.1)
+        row,col = cart2Im(cartX=point[0],cartY=point[1],extent=[dist,dist],resolution=0.1)
         image[row,col] = getGradient(point,closest)
 
-    new_landscape = np.array(new_landscape)
+    image = ndimage.gaussian_filter(image, sigma=3)
 
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(new_landscape)
-    o3d.visualization.draw_geometries([pcd])
+    # new_landscape = np.array(new_landscape)
+
+    # pcd = o3d.geometry.PointCloud()
+    # pcd.points = o3d.utility.Vector3dVector(new_landscape)
+    # o3d.visualization.draw_geometries([pcd])
 
     plt.imshow(image,cmap='gray')
     plt.colorbar()
-    plt.show()
+    plt.imsave(f"landscape_{time.time_ns()}.png",image,cmap='gray')
+    # plt.show()
 
     
     end = time.time()
-    print("Time: ",end-start)
+    total_time = end - start
+    return total_time
 
 def filter_distance(landscape,distance=5):
     # convert to polar
@@ -101,7 +105,7 @@ def filter_distance(landscape,distance=5):
 
     return landscape
 
-def ouster_cb():
+def ouster_cb(filter_dist=5,skips=5):
     with open("landscape.pkl","rb") as f:
         landscape = pickle.load(f)
 
@@ -113,25 +117,29 @@ def ouster_cb():
     landscape[:,2] = landscape[:,2] - min_z
 
     # filter distance
-    landscape = filter_distance(landscape,distance=4)
+    landscape = filter_distance(landscape,distance=filter_dist)
 
     # ind = np.lexsort((landscape[:,1],landscape[:,0]))
 
     # landscape = landscape[ind]
-
-    landscape = landscape[::5]
+    print("Landscape shape: ",landscape.shape)
+    landscape = landscape[::skips]
+    print("Landscape shape: ",landscape.shape)
 
     # n = int(np.sqrt(len(landscape)))
 
     # landscape = landscape[:n**2]
 
     
-    print("X min: ",landscape[:,0].min())
-    print("X max: ",landscape[:,0].max())
-    print("Y min: ",landscape[:,1].min())
-    print("Y max: ",landscape[:,1].max())
+    # print("X min: ",landscape[:,0].min())
+    # print("X max: ",landscape[:,0].max())
+    # print("Y min: ",landscape[:,1].min())
+    # print("Y max: ",landscape[:,1].max())
 
-    gradient2D(landscape,1)
+    print(f"Time:{gradient2D(landscape,filter_dist)}")
+    print("*"*50,"\n")
         
-
-ouster_cb()
+skips = [1,5,10,20,50]
+for skip in skips:
+    ouster_cb(filter_dist=5,skips=skip)
+# ouster_cb(filter_dist=5)
