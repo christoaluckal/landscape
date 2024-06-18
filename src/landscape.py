@@ -9,74 +9,83 @@ import scipy.ndimage as ndimage
 # from scipy.ndimage import gaussian_filter1d
 from numpy import convolve
 import pickle
+from scipy.spatial import KDTree
+import time
+
+def getGradient(point,neighbors):
+    gx = np.diff(neighbors[:,2]+1e-5)/(np.diff(neighbors[:,0])+1e-5)
+    gy = np.diff(neighbors[:,2]+1e-5)/(np.diff(neighbors[:,1])+1e-5)
+
+    gz = np.sqrt(gx**2 + gy**2)
+    gz = np.median(gz)
+    gz = np.clip(gz,0,10)
+
+    # print(f"Point: {point} Neighbors: {neighbors} gx: {gx} gy: {gy} gz: {gz}")
+
+    return gz
+
+def cart2Im(
+    cartX=None,
+    cartY=None,
+    extent=None,
+    resolution=None,
+):
+    row = int((extent[1] - cartY) / resolution)
+    col = int((cartX - extent[0]) / resolution)
+
+    return row, col
+
+def createEmptyImage(
+        extent=5,
+        resolution=None
+):
+    num_rows = int(2*extent / resolution)
+    num_cols = int(2*extent / resolution)
+    return np.zeros((num_rows,num_cols))
+
 
 def gradient2D(landscape,count):
-        xs = landscape[:,0].reshape(count,count)
-        ys = landscape[:,1].reshape(count,count)
-        zs = landscape[:,2].reshape(count,count)
+    landscape_tree = KDTree(landscape)
+    start = time.time()
+    new_landscape = []
 
-        plt.matshow(zs,cmap='viridis')
-        plt.colorbar()
-        plt.show()
+    prev_landscape = np.copy(landscape)
+    pcd_prev = o3d.geometry.PointCloud()
+    pcd_prev.points = o3d.utility.Vector3dVector(prev_landscape)
+    o3d.visualization.draw_geometries([pcd_prev])
 
-        z_mask = np.abs(zs) < 0.1
+    image = createEmptyImage(extent=4,resolution=0.1)
 
-        # set masked values to 0 in zs
-        zs[z_mask] = 0
+    for i in range(len(landscape)):
+        point = landscape[i]
+        r = np.sqrt(point[0]**2 + point[1]**2 + point[2]**2)
+        if r < 2:
+            new_landscape.append([point[0],point[1],0])
+            continue
 
-        new_landscape = np.hstack((xs.flatten()[:,np.newaxis],ys.flatten()[:,np.newaxis],zs.flatten()[:,np.newaxis]))
+        closest = landscape_tree.query(point,k=30)
+        # closest = getClosestN(landscape,point,n=5)
+        closest_idx = closest[1][1:]
+        closest = landscape[closest_idx]
+        getGradient(point,closest)
+        new_landscape.append([point[0],point[1],getGradient(point,closest)])
+
+        row,col = cart2Im(cartX=point[0],cartY=point[1],extent=[4,4],resolution=0.1)
+        image[row,col] = getGradient(point,closest)
+
+    new_landscape = np.array(new_landscape)
+
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(new_landscape)
+    o3d.visualization.draw_geometries([pcd])
+
+    plt.imshow(image,cmap='gray')
+    plt.colorbar()
+    plt.show()
+
     
-        idx = np.arange(len(landscape))
-        plt.scatter(xs.flatten(),zs.flatten(),alpha=0.5,label="XZ",s=1)
-        plt.scatter(ys.flatten(),zs.flatten(),alpha=0.5,label="YZ",s=1)
-        plt.legend()
-        plt.savefig("cart_v_Z.png")
-
-        del_z = []
-
-        for i in range(len(zs)):
-            gx = np.diff(zs[i]+1e-5)/(np.diff(xs[i])+1e-5)
-            gy = np.diff(zs[i]+1e-5)/(np.diff(ys[i])+1e-5)
-
-            gz = np.sqrt(gx**2 + gy**2)
-            # gz = convolve_1d(gz, np.array([1,2,1])/4)
-            # gz = ndimage.gaussian_filter(gz, sigma=3)
-            gz = np.clip(gz,0,100)
-            del_z.append(gz)
-
-        plt.close()
-        
-        im_delz = np.copy(del_z)
-        # im_delz = (im_delz - im_delz.min()) / (im_delz.max() - im_delz.min())
-        # im_delz = 255 * im_delz
-        plt.matshow(im_delz,cmap='viridis')
-        plt.colorbar()
-        plt.savefig("gradient.png")
-        plt.close()
-
-        del_z = np.array(del_z)
-        del_z = np.round(del_z,6)
-        
-        del_z = ndimage.gaussian_filter(del_z, sigma=3)
-        del_z = abs(del_z)
-        
-        # convert to grayscale
-        del_z = (del_z - del_z.min()) / (del_z.max() - del_z.min())
-        del_z = 255 * del_z
-
-        del_z_inv = np.flip(del_z,0)
-        plt.imshow(del_z_inv,cmap='gray')
-
-        print("Landscape shape: ",landscape.shape)
-
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(new_landscape)
-        o3d.visualization.draw_geometries([pcd])
-        plt.imsave("landscape.png",del_z_inv,cmap='gray')
-
-        plt.close()
-        pass
-
+    end = time.time()
+    print("Time: ",end-start)
 
 def filter_distance(landscape,distance=5):
     # convert to polar
@@ -106,15 +115,15 @@ def ouster_cb():
     # filter distance
     landscape = filter_distance(landscape,distance=4)
 
-    ind = np.lexsort((landscape[:,1],landscape[:,0]))
+    # ind = np.lexsort((landscape[:,1],landscape[:,0]))
 
-    landscape = landscape[ind]
+    # landscape = landscape[ind]
 
     landscape = landscape[::5]
 
-    n = int(np.sqrt(len(landscape)))
+    # n = int(np.sqrt(len(landscape)))
 
-    landscape = landscape[:n**2]
+    # landscape = landscape[:n**2]
 
     
     print("X min: ",landscape[:,0].min())
@@ -122,7 +131,7 @@ def ouster_cb():
     print("Y min: ",landscape[:,1].min())
     print("Y max: ",landscape[:,1].max())
 
-    gradient2D(landscape,n)
+    gradient2D(landscape,1)
         
 
 ouster_cb()
