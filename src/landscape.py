@@ -7,6 +7,7 @@ import pickle
 from scipy.spatial import KDTree
 import time
 import cv2
+import sys
 
 map_templet = '''
 image: IMAGE_PATH
@@ -16,6 +17,8 @@ occupied_thresh: 0.65
 free_thresh: 0.196
 negate: 0
 '''
+
+nav2_flag = bool(int(sys.argv[1]))
 
 def getGradient(point,neighbors):
     gx = np.diff(neighbors[:,2]+1e-5)/(np.diff(neighbors[:,0])+1e-5)
@@ -65,7 +68,11 @@ def createEmptyImage(
 
 def gradient2D(landscape,dist):
 
-    nav2 = False
+    # nav2 = False
+    import open3d as o3d
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(landscape)
+    o3d.visualization.draw_geometries([pcd])
 
     landscape_tree = KDTree(landscape)
     start = time.time()
@@ -92,7 +99,7 @@ def gradient2D(landscape,dist):
     image[mask] = 0
     
 
-    if nav2:
+    if nav2_flag:
         image = cv2.dilate(image, np.ones((3,3),np.uint8), iterations=1)
         image = ndimage.gaussian_filter(image, sigma=1)
 
@@ -101,12 +108,15 @@ def gradient2D(landscape,dist):
         image = 255*(1-image)
         image = np.rot90(image,3)
 
-        image = np.uint8(image)
 
         mask = image > 200
         image[mask] = 255
         image[~mask] = 0
         
+        image = np.uint8(image)
+
+        plt.imshow(image)
+        plt.show()
     else:
         image = cv2.dilate(image, np.ones((3,3),np.uint8), iterations=1)
 
@@ -115,6 +125,8 @@ def gradient2D(landscape,dist):
         image = ndimage.gaussian_filter(image, sigma=3)
 
         image = np.uint8(image)
+        plt.imshow(image)
+        plt.show()
 
         # print(cart2Im(0,0,[dist,dist],0.1))
         # print(cart2Im(5,5,[dist,dist],0.1))
@@ -127,14 +139,6 @@ def gradient2D(landscape,dist):
         # print(img2Cart(150,100,[dist,dist],0.1))
         # print(img2Cart(100,50,[dist,dist],0.1))
     
-
-
-    cv2.imshow('a',image)
-    cv2.waitKey(0)
-    # plt.imshow(image)
-    # plt.show()
-    # plt.imsave('image.png',image)
-
  
 
 def filter_distance(landscape,distance=5):
