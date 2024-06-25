@@ -1,16 +1,21 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import rospy
-from sensor_msgs.msg import PointCloud2
-from nav_msgs.msg import OccupancyGrid
-import ros_numpy
-import open3d as o3d
 import scipy.ndimage as ndimage
 # from scipy.ndimage import gaussian_filter1d
 from numpy import convolve
 import pickle
 from scipy.spatial import KDTree
 import time
+import cv2
+
+map_templet = '''
+image: IMAGE_PATH
+resolution: IMAGE_RES
+origin: [IMAGE_OX, IMAGE_OY, 0.0]
+occupied_thresh: 0.65
+free_thresh: 0.196
+negate: 0
+'''
 
 def getGradient(point,neighbors):
     gx = np.diff(neighbors[:,2]+1e-5)/(np.diff(neighbors[:,0])+1e-5)
@@ -24,14 +29,28 @@ def getGradient(point,neighbors):
 
     return gz
 
+def img2Cart(
+    row=None,
+    col=None,
+    extent=None,
+    res=None
+):
+    x = col*res-extent[0]
+    y = extent[1]-row*res
+
+    return x,y
+
 def cart2Im(
     cartX=None,
     cartY=None,
     extent=None,
     resolution=None,
 ):
-    row = int((extent[1] - cartY) / resolution)
-    col = int((cartX - extent[0]) / resolution)
+    # row = int((extent[1] - cartY) / resolution)
+    # col = int((cartX - extent[0]) / resolution)
+
+    row = int((extent[1]-cartY)/resolution)
+    col = int((extent[1]+cartX)/resolution)
 
     return row, col
 
@@ -45,14 +64,11 @@ def createEmptyImage(
 
 
 def gradient2D(landscape,dist):
+
+    nav2 = False
+
     landscape_tree = KDTree(landscape)
     start = time.time()
-    new_landscape = []
-
-    # prev_landscape = np.copy(landscape)
-    # pcd_prev = o3d.geometry.PointCloud()
-    # pcd_prev.points = o3d.utility.Vector3dVector(prev_landscape)
-    # o3d.visualization.draw_geometries([pcd_prev])
 
     image = createEmptyImage(extent=dist,resolution=0.1)
 
@@ -60,7 +76,6 @@ def gradient2D(landscape,dist):
         point = landscape[i]
         r = np.sqrt(point[0]**2 + point[1]**2 + point[2]**2)
         if r < 2:
-            new_landscape.append([point[0],point[1],0])
             continue
 
         closest = landscape_tree.query(point,k=30)
@@ -68,28 +83,59 @@ def gradient2D(landscape,dist):
         closest_idx = closest[1][1:]
         closest = landscape[closest_idx]
         getGradient(point,closest)
-        new_landscape.append([point[0],point[1],getGradient(point,closest)])
 
         row,col = cart2Im(cartX=point[0],cartY=point[1],extent=[dist,dist],resolution=0.1)
         image[row,col] = getGradient(point,closest)
 
-    image = ndimage.gaussian_filter(image, sigma=3)
-
-    # new_landscape = np.array(new_landscape)
-
-    # pcd = o3d.geometry.PointCloud()
-    # pcd.points = o3d.utility.Vector3dVector(new_landscape)
-    # o3d.visualization.draw_geometries([pcd])
-
-    plt.imshow(image,cmap='gray')
-    plt.colorbar()
-    plt.imsave(f"landscape_{time.time_ns()}.png",image,cmap='gray')
-    # plt.show()
-
+    # binarize image
+    mask = image < 1
+    image[mask] = 0
     
-    end = time.time()
-    total_time = end - start
-    return total_time
+
+    if nav2:
+        image = cv2.dilate(image, np.ones((3,3),np.uint8), iterations=1)
+        image = ndimage.gaussian_filter(image, sigma=1)
+
+        image = (image - image.min())/(image.max()-image.min())
+
+        image = 255*(1-image)
+        image = np.rot90(image,3)
+
+        image = np.uint8(image)
+
+        mask = image > 200
+        image[mask] = 255
+        image[~mask] = 0
+        
+    else:
+        image = cv2.dilate(image, np.ones((3,3),np.uint8), iterations=1)
+
+        image = (image - image.min())/(image.max()-image.min())
+        image = 255*(image)
+        image = ndimage.gaussian_filter(image, sigma=3)
+
+        image = np.uint8(image)
+
+        # print(cart2Im(0,0,[dist,dist],0.1))
+        # print(cart2Im(5,5,[dist,dist],0.1))
+        # print(cart2Im(5,-5,[dist,dist],0.1))
+        # print(cart2Im(-5,-5,[dist,dist],0.1))
+        # print(cart2Im(-5,5,[dist,dist],0.1))
+
+        # print(img2Cart(50,100,[dist,dist],0.1))
+        # print(img2Cart(100,150,[dist,dist],0.1))
+        # print(img2Cart(150,100,[dist,dist],0.1))
+        # print(img2Cart(100,50,[dist,dist],0.1))
+    
+
+
+    cv2.imshow('a',image)
+    cv2.waitKey(0)
+    # plt.imshow(image)
+    # plt.show()
+    # plt.imsave('image.png',image)
+
+ 
 
 def filter_distance(landscape,distance=5):
     # convert to polar
@@ -106,11 +152,11 @@ def filter_distance(landscape,distance=5):
     return landscape
 
 def ouster_cb(filter_dist=5,skips=5):
-    with open("landscape.pkl","rb") as f:
+    with open("landscape_nobar.pkl","rb") as f:
         landscape = pickle.load(f)
 
     # remove all z values greater than 1
-    landscape = landscape[landscape[:,2] < 1]
+    landscape = landscape[landscape[:,2] < 3]
 
     # get median z value
     min_z = np.median(landscape[:,2])
@@ -126,20 +172,11 @@ def ouster_cb(filter_dist=5,skips=5):
     landscape = landscape[::skips]
     print("Landscape shape: ",landscape.shape)
 
-    # n = int(np.sqrt(len(landscape)))
-
-    # landscape = landscape[:n**2]
-
-    
-    # print("X min: ",landscape[:,0].min())
-    # print("X max: ",landscape[:,0].max())
-    # print("Y min: ",landscape[:,1].min())
-    # print("Y max: ",landscape[:,1].max())
 
     print(f"Time:{gradient2D(landscape,filter_dist)}")
     print("*"*50,"\n")
         
-skips = [1,5,10,20,50]
+skips = [10]
 for skip in skips:
-    ouster_cb(filter_dist=5,skips=skip)
+    ouster_cb(filter_dist=10,skips=skip)
 # ouster_cb(filter_dist=5)

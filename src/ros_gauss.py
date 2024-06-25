@@ -116,8 +116,10 @@ class PPMMaker:
         landscape = ros_numpy.point_cloud2.pointcloud2_to_xyz_array(self.points)
         landscape = np.array(landscape)
         
-        with open("landscape.pkl","wb") as f:
+        with open("landscape_nobar.pkl","wb") as f:
             pickle.dump(landscape,f)
+
+        print(f"Saved landscape to landscape_nobar.pkl")
 
         # remove all z values greater than 1
         landscape = landscape[landscape[:,2] < 1]
