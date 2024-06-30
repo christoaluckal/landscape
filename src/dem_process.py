@@ -76,6 +76,9 @@ top_left_lat, top_left_lon = pixel2latlon(0, 0, gt[0], gt[1], gt[2], gt[3], gt[4
 
 top_left_x, top_left_y, top_left_z = gps_to_ecef_pyproj(top_left_lat, top_left_lon, ele[0,0])
 
+center = [ele.shape[0]//2, ele.shape[1]//2]
+z_center = ele[center[0],center[1]]
+
 xyz = []
 
 image = []
@@ -100,15 +103,26 @@ zs = np.array(zs)
 
 xs = xs - top_left_x
 ys = ys - top_left_y
-# zs = zs - top_left_z
+
 
 for i in range(len(xs)):
     xyz.append([xs[i],ys[i],zs[i]])
 
 xyz = np.array(xyz)
 
+min_z = np.min(zs)
+max_z = np.max(zs)
+
+xyz[:,0] = (xyz[:,0] - min_z) / (max_z - min_z)
+xyz[:,0]
+
+
+xyz_c = np.copy(xyz)
+
 import open3d as o3d
 
 pcd = o3d.geometry.PointCloud()
-pcd.points = o3d.utility.Vector3dVector(xyz)
+pcd.points = o3d.utility.Vector3dVector(xyz_c)
 o3d.visualization.draw_geometries([pcd])
+
+o3d.io.write_point_cloud("space_2.ply", pcd)
