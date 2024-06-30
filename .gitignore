@@ -162,3 +162,4 @@ cython_debug/
 #.idea/
 src/space.ply
 src/space.tif
+src/space_2.ply

@@ -76,8 +76,14 @@ top_left_lat, top_left_lon = pixel2latlon(0, 0, gt[0], gt[1], gt[2], gt[3], gt[4
 
 top_left_x, top_left_y, top_left_z = gps_to_ecef_pyproj(top_left_lat, top_left_lon, ele[0,0])
 
+print(f"Top left: {top_left_x}, {top_left_y}, {top_left_z}")
+
 center = [ele.shape[0]//2, ele.shape[1]//2]
-z_center = ele[center[0],center[1]]
+
+center_lat, center_lon = pixel2latlon(center[0], center[1], gt[0], gt[1], gt[2], gt[3], gt[4], gt[5]) 
+center_x, center_y, center_z = gps_to_ecef_pyproj(center_lat, center_lon, ele[center[0],center[1]])
+
+print(f"Center: {center_x}, {center_y}, {center_z}")
 
 xyz = []
 
@@ -101,28 +107,25 @@ xs = np.array(xs)
 ys = np.array(ys)
 zs = np.array(zs)
 
-xs = xs - top_left_x
-ys = ys - top_left_y
+xs = xs - center_x
+ys = ys - center_y
 
 
-for i in range(len(xs)):
-    xyz.append([xs[i],ys[i],zs[i]])
 
-xyz = np.array(xyz)
+xyz = np.vstack([zs,xs,ys]).T
 
 min_z = np.min(zs)
-max_z = np.max(zs)
+min_x = np.min(xs)
+min_y = np.min(ys)
 
-xyz[:,0] = (xyz[:,0] - min_z) / (max_z - min_z)
-xyz[:,0]
-
-
-xyz_c = np.copy(xyz)
+xyz[:,0] = xyz[:,0] - min_z
+xyz[:,1] = xyz[:,1] - min_x
+xyz[:,2] = xyz[:,2] - min_y
 
 import open3d as o3d
 
 pcd = o3d.geometry.PointCloud()
-pcd.points = o3d.utility.Vector3dVector(xyz_c)
+pcd.points = o3d.utility.Vector3dVector(xyz)
 o3d.visualization.draw_geometries([pcd])
 
 o3d.io.write_point_cloud("space_2.ply", pcd)
