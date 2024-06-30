@@ -63,6 +63,8 @@ plt.show()
 gt = dataset.GetGeoTransform()
 
 def gps_to_ecef_pyproj(lat, lon, alt):
+    lat = np.radians(lat)
+    lon = np.radians(lon)
     ecef = pyproj.Proj(proj='geocent', ellps='WGS84', datum='WGS84')
     lla = pyproj.Proj(proj='latlong', ellps='WGS84', datum='WGS84')
     # x, y, z = pyproj.transform(lla, ecef, lon, lat, alt, radians=False)
@@ -70,39 +72,43 @@ def gps_to_ecef_pyproj(lat, lon, alt):
 
     return x, y, z
 
-# lla_list = []
+top_left_lat, top_left_lon = pixel2latlon(0, 0, gt[0], gt[1], gt[2], gt[3], gt[4], gt[5])
 
+top_left_x, top_left_y, top_left_z = gps_to_ecef_pyproj(top_left_lat, top_left_lon, ele[0,0])
 
+xyz = []
 
-# for i in tqdm(range(0, dataset.RasterYSize, 50)):
-#     for j in range(0, dataset.RasterXSize, 50):
-#         lat, lon = pixel2latlon(i, j, gt[0], gt[1], gt[2], gt[3], gt[4], gt[5])
-#         lla_list.append((lat, lon, ele_masked[i,j]))
+image = []
+lats = []
+lons = []
+alts = []
 
-center = [ele_masked.shape[0]//2, ele_masked.shape[1]//2]
-lat_0,lon_0 = pixel2latlon(center[0], center[1], gt[0], gt[1], gt[2], gt[3], gt[4], gt[5])
-ele_0 = ele_masked[center[0], center[1]]
+for i in tqdm(range(0, ele.shape[0], 10)):
+    row = []
+    for j in range(0,ele.shape[1],10):
+        row.append(ele_masked[i,j])
+        lat, lon = pixel2latlon(i, j, gt[0], gt[1], gt[2], gt[3], gt[4], gt[5])
+        lats.append(lat)
+        lons.append(lon)
+        alts.append(ele_masked[i,j])
+    image.append(row)
 
-ele_masked = (ele_masked - ele_masked.min()) / (ele_masked.max() - ele_masked.min())
+xs,ys,zs = gps_to_ecef_pyproj(lats,lons,alts)
+xs = np.array(xs)
+ys = np.array(ys)
+zs = np.array(zs)
 
-plt.matshow(ele_masked)
-plt.show()
+xs = xs - top_left_x
+ys = ys - top_left_y
+# zs = zs - top_left_z
 
-# x_0, y_0, z_0 = gps_to_ecef_pyproj(lat_0, lon_0, ele_0)
+for i in range(len(xs)):
+    xyz.append([xs[i],ys[i],zs[i]])
 
-# ele_masked = ele_masked - ele_0
+xyz = np.array(xyz)
 
-# xyz = []
+import open3d as o3d
 
-# for i in tqdm(range(0, dataset.RasterYSize, 100)):
-#     for j in range(0, dataset.RasterXSize, 100):
-#         lat, lon = pixel2latlon(j,i, gt[0], gt[1], gt[2], gt[3], gt[4], gt[5])
-#         ele = ele_masked[i,j]
-#         x, y, z = gps_to_ecef_pyproj(lat, lon, ele)
-#         x = x - x_0
-#         y = y - y_0
-#         z = z - z_0
-#         xyz.append((x,y,z))
-
-# xyz = np.array(xyz)
-# np.save("xyz.npy", xyz)
+pcd = o3d.geometry.PointCloud()
+pcd.points = o3d.utility.Vector3dVector(xyz)
+o3d.visualization.draw_geometries([pcd])
