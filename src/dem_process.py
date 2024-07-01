@@ -7,9 +7,13 @@ from tqdm import tqdm
 
 
 def pixel2latlon(x, y,gt_0, gt_1, gt_2, gt_3, gt_4, gt_5):
+
+    # swap x and y
+    # x, y = y, x
+
     """Returns lat lon from pixel"""
-    lat = gt_0 + x * gt_1 + y * gt_2
-    lon = gt_3 + x * gt_4 + y * gt_5
+    lon = gt_0 + x * gt_1 + y * gt_2
+    lat = gt_3 + x * gt_4 + y * gt_5
     return lat, lon
 
 def latlon2pixel(lat, lon):
@@ -18,6 +22,18 @@ def latlon2pixel(lat, lon):
     y = (lat - gt[3]) / gt[5]
     return x, y
     # pass
+
+def printBounds(array):
+    x_min = np.min(array[:,0])
+    x_max = np.max(array[:,0])
+    y_min = np.min(array[:,1])
+    y_max = np.max(array[:,1])
+    z_min = np.min(array[:,2])
+    z_max = np.max(array[:,2])
+
+    print(f"X: {x_min} - {x_max}")
+    print(f"Y: {y_min} - {y_max}")
+    print(f"Z: {z_min} - {z_max}")
 
 
 
@@ -55,9 +71,10 @@ ele = band.ReadAsArray()
 mask = ele < min
 ele_masked = np.copy(ele)
 ele_masked[mask] = min
+ele = np.copy(ele_masked)
 # ele_norm = (ele_masked - min) / (max - min)
 
-plt.matshow(ele_masked)
+plt.imshow(ele_masked)
 plt.show()
 
 gt = dataset.GetGeoTransform()
@@ -67,65 +84,65 @@ def gps_to_ecef_pyproj(lat, lon, alt):
     lon = np.radians(lon)
     ecef = pyproj.Proj(proj='geocent', ellps='WGS84', datum='WGS84')
     lla = pyproj.Proj(proj='latlong', ellps='WGS84', datum='WGS84')
-    # x, y, z = pyproj.transform(lla, ecef, lon, lat, alt, radians=False)
-    x,y,z = pyproj.transformer.Transformer.from_proj(lla, ecef).transform(lon, lat, alt)
+    # x, y, z = pyproj.transform(lla, ecef, lon, lat, alt, radians=True)
+    x,y,z = pyproj.transformer.Transformer.from_proj(lla, ecef).transform(lon, lat, alt, radians=True)
 
-    return x, y, z
+    return z,x,y
 
-top_left_lat, top_left_lon = pixel2latlon(0, 0, gt[0], gt[1], gt[2], gt[3], gt[4], gt[5])
+mid_row = ele.shape[0] // 2
+mid_col = ele.shape[1] // 2
 
-top_left_x, top_left_y, top_left_z = gps_to_ecef_pyproj(top_left_lat, top_left_lon, ele[0,0])
+im_extent = [
+    [0,0],
+    [0, mid_col],
+    [0, 2*mid_col - 1],
+    [mid_row, 0],
+    [mid_row, mid_col],
+    [mid_row, 2*mid_col - 1],
+    [2*mid_row - 1, 0],
+    [2*mid_row - 1, mid_col],
+    [2*mid_row - 1, 2*mid_col - 1]
+]
 
-print(f"Top left: {top_left_x}, {top_left_y}, {top_left_z}")
+latlon_extent = []
+for i in im_extent:
+    latlon_extent.append(i)
 
-center = [ele.shape[0]//2, ele.shape[1]//2]
 
-center_lat, center_lon = pixel2latlon(center[0], center[1], gt[0], gt[1], gt[2], gt[3], gt[4], gt[5]) 
-center_x, center_y, center_z = gps_to_ecef_pyproj(center_lat, center_lon, ele[center[0],center[1]])
+ex1_lat, ex1_lon = pixel2latlon(latlon_extent[0][0], latlon_extent[0][1], *gt)
+ex3_lat, ex3_lon = pixel2latlon(latlon_extent[2][0], latlon_extent[2][1], *gt)
+ex7_lat, ex7_lon = pixel2latlon(latlon_extent[6][0], latlon_extent[6][1], *gt)
+ex9_lat, ex9_lon = pixel2latlon(latlon_extent[8][0], latlon_extent[8][1], *gt)
 
-print(f"Center: {center_x}, {center_y}, {center_z}")
+ex1_x, ex1_y, ex1_z = gps_to_ecef_pyproj(ex1_lat, ex1_lon, ele[im_extent[0][0], im_extent[0][1]])
+ex3_x, ex3_y, ex3_z = gps_to_ecef_pyproj(ex3_lat, ex3_lon, ele[im_extent[2][0], im_extent[2][1]])
+ex7_x, ex7_y, ex7_z = gps_to_ecef_pyproj(ex7_lat, ex7_lon, ele[im_extent[6][0], im_extent[6][1]])
+ex9_x, ex9_y, ex9_z = gps_to_ecef_pyproj(ex9_lat, ex9_lon, ele[im_extent[8][0], im_extent[8][1]])
 
-xyz = []
+print(f"Ex1 LatLon: {ex1_lat}, {ex1_lon}")
+print(f"Ex3 LatLon: {ex3_lat}, {ex3_lon}")
+print(f"Ex7 LatLon: {ex7_lat}, {ex7_lon}")
+print(f"Ex9 LatLon: {ex9_lat}, {ex9_lon}")
 
-image = []
+print(f"Ex1-3, {ex3_x - ex1_x}, {ex3_y - ex1_y}")
+print(f"Ex1-7, {ex7_x - ex1_x}, {ex7_y - ex1_y}")
+
 lats = []
 lons = []
 alts = []
 
-for i in tqdm(range(0, ele.shape[0], 10)):
-    row = []
-    for j in range(0,ele.shape[1],10):
-        row.append(ele_masked[i,j])
-        lat, lon = pixel2latlon(i, j, gt[0], gt[1], gt[2], gt[3], gt[4], gt[5])
+for i in range(ele_masked.shape[0]):
+    for j in range(ele_masked.shape[1]):
+        lat, lon = pixel2latlon(i, j, *gt)
+        alt = ele_masked[i, j]
         lats.append(lat)
         lons.append(lon)
-        alts.append(ele_masked[i,j])
-    image.append(row)
+        alts.append(alt)
 
-xs,ys,zs = gps_to_ecef_pyproj(lats,lons,alts)
-xs = np.array(xs)
-ys = np.array(ys)
-zs = np.array(zs)
 
-xs = xs - center_x
-ys = ys - center_y
+lats = np.array(lats)
+lons = np.array(lons)
+alts = np.array(alts)
 
 
 
-xyz = np.vstack([zs,xs,ys]).T
-
-min_z = np.min(zs)
-min_x = np.min(xs)
-min_y = np.min(ys)
-
-xyz[:,0] = xyz[:,0] - min_z
-xyz[:,1] = xyz[:,1] - min_x
-xyz[:,2] = xyz[:,2] - min_y
-
-import open3d as o3d
-
-pcd = o3d.geometry.PointCloud()
-pcd.points = o3d.utility.Vector3dVector(xyz)
-o3d.visualization.draw_geometries([pcd])
-
-o3d.io.write_point_cloud("space_2.ply", pcd)
