@@ -8,9 +8,6 @@ from tqdm import tqdm
 
 def pixel2latlon(x, y,gt_0, gt_1, gt_2, gt_3, gt_4, gt_5):
 
-    # swap x and y
-    # x, y = y, x
-
     """Returns lat lon from pixel"""
     lon = gt_0 + x * gt_1 + y * gt_2
     lat = gt_3 + x * gt_4 + y * gt_5
@@ -113,11 +110,13 @@ ex1_lat, ex1_lon = pixel2latlon(latlon_extent[0][0], latlon_extent[0][1], *gt)
 ex3_lat, ex3_lon = pixel2latlon(latlon_extent[2][0], latlon_extent[2][1], *gt)
 ex7_lat, ex7_lon = pixel2latlon(latlon_extent[6][0], latlon_extent[6][1], *gt)
 ex9_lat, ex9_lon = pixel2latlon(latlon_extent[8][0], latlon_extent[8][1], *gt)
+center_lat, center_lon = pixel2latlon(latlon_extent[4][0], latlon_extent[4][1], *gt)
 
 ex1_x, ex1_y, ex1_z = gps_to_ecef_pyproj(ex1_lat, ex1_lon, ele[im_extent[0][0], im_extent[0][1]])
 ex3_x, ex3_y, ex3_z = gps_to_ecef_pyproj(ex3_lat, ex3_lon, ele[im_extent[2][0], im_extent[2][1]])
 ex7_x, ex7_y, ex7_z = gps_to_ecef_pyproj(ex7_lat, ex7_lon, ele[im_extent[6][0], im_extent[6][1]])
 ex9_x, ex9_y, ex9_z = gps_to_ecef_pyproj(ex9_lat, ex9_lon, ele[im_extent[8][0], im_extent[8][1]])
+cent_x, cent_y, cent_z = gps_to_ecef_pyproj(center_lat, center_lon, ele[im_extent[4][0], im_extent[4][1]])
 
 print(f"Ex1 LatLon: {ex1_lat}, {ex1_lon}")
 print(f"Ex3 LatLon: {ex3_lat}, {ex3_lon}")
@@ -131,8 +130,8 @@ lats = []
 lons = []
 alts = []
 
-for i in range(ele_masked.shape[0]):
-    for j in range(ele_masked.shape[1]):
+for i in tqdm(range(0,ele_masked.shape[0],5)):
+    for j in range(0,ele_masked.shape[1],5):
         lat, lon = pixel2latlon(i, j, *gt)
         alt = ele_masked[i, j]
         lats.append(lat)
@@ -143,6 +142,22 @@ for i in range(ele_masked.shape[0]):
 lats = np.array(lats)
 lons = np.array(lons)
 alts = np.array(alts)
+
+x,y,z = gps_to_ecef_pyproj(lats, lons, alts)
+
+x = x-cent_x
+y = y-cent_y
+z = z-cent_z
+
+xyz = np.vstack((x,y,z)).T
+
+printBounds(xyz)
+
+import open3d as o3d
+
+pcd = o3d.geometry.PointCloud()
+pcd.points = o3d.utility.Vector3dVector(xyz)
+o3d.visualization.draw_geometries([pcd])
 
 
 
