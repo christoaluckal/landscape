@@ -8,6 +8,7 @@ from scipy.spatial import KDTree
 import time
 import cv2
 import sys
+import tqdm
 
 map_templet = '''
 image: IMAGE_PATH
@@ -79,13 +80,13 @@ def gradient2D(landscape,dist):
 
     image = createEmptyImage(extent=dist,resolution=0.1)
 
-    for i in range(len(landscape)):
+    for i in tqdm.tqdm(range(len(landscape))):
         point = landscape[i]
         r = np.sqrt(point[0]**2 + point[1]**2 + point[2]**2)
         if r < 2:
             continue
 
-        closest = landscape_tree.query(point,k=30)
+        closest = landscape_tree.query(point,k=100)
         # closest = getClosestN(landscape,point,n=5)
         closest_idx = closest[1][1:]
         closest = landscape[closest_idx]
@@ -95,8 +96,8 @@ def gradient2D(landscape,dist):
         image[row,col] = getGradient(point,closest)
 
     # binarize image
-    mask = image < 1
-    image[mask] = 0
+    # mask = image < 1
+    # image[mask] = 0
     
 
     if nav2_flag:
@@ -109,7 +110,7 @@ def gradient2D(landscape,dist):
         image = np.rot90(image,3)
 
 
-        mask = image > 200
+        mask = image > 245
         image[mask] = 255
         image[~mask] = 0
         
@@ -156,11 +157,11 @@ def filter_distance(landscape,distance=5):
     return landscape
 
 def ouster_cb(filter_dist=5,skips=5):
-    with open("landscape_nobar.pkl","rb") as f:
+    with open("workspace.pkl","rb") as f:
         landscape = pickle.load(f)
 
     # remove all z values greater than 1
-    landscape = landscape[landscape[:,2] < 3]
+    landscape = landscape[landscape[:,2] < 50]
 
     # get median z value
     min_z = np.median(landscape[:,2])
@@ -182,5 +183,5 @@ def ouster_cb(filter_dist=5,skips=5):
         
 skips = [10]
 for skip in skips:
-    ouster_cb(filter_dist=10,skips=skip)
+    ouster_cb(filter_dist=50,skips=skip)
 # ouster_cb(filter_dist=5)

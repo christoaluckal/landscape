@@ -13,6 +13,47 @@ def pixel2latlon(x, y,gt_0, gt_1, gt_2, gt_3, gt_4, gt_5):
     lat = gt_3 + x * gt_4 + y * gt_5
     return lat, lon
 
+def ecef2enu(reference_ECEF=None,reference_LatLongAlt=None,candidate_ECEF=None):
+    G_phi = reference_LatLongAlt[0]
+    G_lambda = reference_LatLongAlt[1]
+    G_h = reference_LatLongAlt[2]
+    
+
+    if type(candidate_ECEF) == np.ndarray and type(reference_ECEF) == np.ndarray:
+
+        pass
+
+    else:
+        reference_ECEF = np.array(reference_ECEF)
+        candidate_ECEF = np.array(candidate_ECEF)
+
+    R = np.array([
+        [-np.sin(G_lambda), np.cos(G_lambda), 0],
+        [-np.sin(G_phi)*np.cos(G_lambda), -np.sin(G_phi)*np.sin(G_lambda), np.cos(G_phi)],
+        [np.cos(G_phi)*np.cos(G_lambda), np.cos(G_phi)*np.sin(G_lambda), np.sin(G_phi)]
+        ])
+    P = candidate_ECEF - reference_ECEF
+    ENU = np.dot(R,P.T).T
+    return ENU
+        
+    
+    # gX = reference_ECEF[0]
+    # gY = reference_ECEF[1]
+    # gZ = reference_ECEF[2]
+
+    # cX = candidate_ECEF[0]
+    # cY = candidate_ECEF[1]
+    # cZ = candidate_ECEF[2]
+
+    # E = -1*(cX-gX)*np.sin(G_lambda) + (cY-gY)*np.cos(G_lambda)
+    # N = -1*(cX-gX)*np.cos(G_lambda)*np.sin(G_phi) - (cY-gY)*np.sin(G_lambda)*np.sin(G_phi) + (cZ-gZ)*np.cos(G_phi)
+    # U = (cX-gX)*np.cos(G_lambda)*np.cos(G_phi) + (cY-gY)*np.sin(G_lambda)*np.cos(G_phi) + (cZ-gZ)*np.sin(G_phi)
+
+    # ENU = np.vstack((E,N,U))
+    # return ENU.T
+
+
+    
 def latlon2pixel(lat, lon):
     """Returns pixel coordinates from lat lon"""
     x = (lon - gt[0]) / gt[1]
@@ -71,8 +112,8 @@ ele_masked[mask] = min
 ele = np.copy(ele_masked)
 # ele_norm = (ele_masked - min) / (max - min)
 
-plt.imshow(ele_masked)
-plt.show()
+# plt.imshow(ele_masked)
+# plt.show()
 
 gt = dataset.GetGeoTransform()
 
@@ -111,6 +152,7 @@ ex3_lat, ex3_lon = pixel2latlon(latlon_extent[2][0], latlon_extent[2][1], *gt)
 ex7_lat, ex7_lon = pixel2latlon(latlon_extent[6][0], latlon_extent[6][1], *gt)
 ex9_lat, ex9_lon = pixel2latlon(latlon_extent[8][0], latlon_extent[8][1], *gt)
 center_lat, center_lon = pixel2latlon(latlon_extent[4][0], latlon_extent[4][1], *gt)
+print(f"Center LatLon: {center_lat}, {center_lon}, {ele[im_extent[4][0], im_extent[4][1]]}")
 
 ex1_x, ex1_y, ex1_z = gps_to_ecef_pyproj(ex1_lat, ex1_lon, ele[im_extent[0][0], im_extent[0][1]])
 ex3_x, ex3_y, ex3_z = gps_to_ecef_pyproj(ex3_lat, ex3_lon, ele[im_extent[2][0], im_extent[2][1]])
@@ -132,7 +174,7 @@ alts = []
 
 for i in tqdm(range(0,ele_masked.shape[0],5)):
     for j in range(0,ele_masked.shape[1],5):
-        lat, lon = pixel2latlon(i, j, *gt)
+        lat, lon = pixel2latlon(j,i, *gt)
         alt = ele_masked[i, j]
         lats.append(lat)
         lons.append(lon)
@@ -145,18 +187,27 @@ alts = np.array(alts)
 
 x,y,z = gps_to_ecef_pyproj(lats, lons, alts)
 
-x = x-cent_x
-y = y-cent_y
-z = z-cent_z
 
 xyz = np.vstack((x,y,z)).T
 
-printBounds(xyz)
+ENUs = ecef2enu([cent_x, cent_y, cent_z],[center_lat, center_lon, 0], xyz)
+
+
+# ENUs[:,[0,1,2]] = ENUs[:,[0,1,2]]
+# ENUs[:,[0,1,2]] = ENUs[:,[0,2,1]]
+# ENUs[:,[0,1,2]] = ENUs[:,[1,0,2]]
+# ENUs[:,[0,1,2]] = ENUs[:,[1,2,0]]
+# ENUs[:,[0,1,2]] = ENUs[:,[2,0,1]]
+ENUs[:,[0,1,2]] = ENUs[:,[2,1,0]]
+
+
+
+printBounds(ENUs)
 
 import open3d as o3d
 
 pcd = o3d.geometry.PointCloud()
-pcd.points = o3d.utility.Vector3dVector(xyz)
+pcd.points = o3d.utility.Vector3dVector(ENUs)
 o3d.visualization.draw_geometries([pcd])
 
 
