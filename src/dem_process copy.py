@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import pyproj
 import pyproj.transformer
 from tqdm import tqdm
+from scipy.spatial import KDTree
 
 
 def pixel2latlon(x, y,gt_0, gt_1, gt_2, gt_3, gt_4, gt_5):
@@ -76,6 +77,8 @@ def compute_ecef_to_enu_transform( lati_r, longi_r ):
     T_enu_ecef = T
     return T_enu_ecef
 
+
+
 def rotate(points,rpy=[0,0,0]):
     """ Rotate points by roll, pitch, yaw """
     roll = rpy[0]
@@ -93,6 +96,48 @@ def rotate(points,rpy=[0,0,0]):
     ])
 
     return np.dot(R,points.T).T
+
+def computeOrientation(tree: KDTree, k: int = 50):
+
+    avg_roll = 0
+    avg_pitch = 0
+    avg_yaw = 0
+    trials = 100
+
+    for _ in range(trials):
+        idx = np.random.randint(0,tree.data.shape[0])
+        point = tree.data[idx]
+
+        closest_k = tree.query(point, k=k)
+
+        reference = point
+        closest_k = tree.data[closest_k[1]]
+
+
+        
+        for i in range(k):
+            delta = closest_k[i] - reference
+            roll = np.arctan2(delta[1],delta[2])
+            pitch = np.arctan2(delta[0],delta[2])
+            yaw = np.arctan2(delta[0],delta[1])
+
+            avg_roll += roll
+            avg_pitch += pitch
+            avg_yaw += yaw
+
+    
+    avg_roll /= k*trials
+    avg_pitch /= k*trials
+    avg_yaw /= k*trials
+
+    avg_roll = np.degrees(avg_roll)
+    avg_pitch = np.degrees(avg_pitch)
+    avg_yaw = np.degrees(avg_yaw)
+
+    print(f"Roll: {avg_roll}, Pitch: {avg_pitch}, Yaw: {avg_yaw}")
+
+
+
 
 
 dataset = gdal.Open("space.tif", gdal.GA_ReadOnly)
@@ -173,11 +218,11 @@ Y = []
 Z = []
 
 Xr,Yr,Zr = geodedic_to_ecef(center_lat,center_lon,ele[im_extent[4][0], im_extent[4][1]])
-T = compute_ecef_to_enu_transform(center_lat,center_lon)
+T = compute_ecef_to_enu_transform(ex7_lat,ex7_lon)
 
 for i in tqdm(range(0,ele_masked.shape[0],5)):
     for j in range(0,ele_masked.shape[1],5):
-        lat,lon = pixel2latlon(i,j,*gt)
+        lat,lon = pixel2latlon(j,i,*gt)
         alt = ele_masked[i,j]
         
         Xp,Yp,Zp = geodedic_to_ecef(lat,lon,alt)
@@ -193,10 +238,13 @@ Z = np.array(Z)
 delta = np.array([X-Xr,Y-Yr,Z-Zr])
 p = np.dot(T,delta).T
 
+point_tree = KDTree(p)
+
+computeOrientation(point_tree)
 # p = rotate(p,[90,0,0])
 
 # reflect about Y axis
-p[:,2] = -p[:,2]
+# p[:,2] = -p[:,2]
 
 import pickle
 
