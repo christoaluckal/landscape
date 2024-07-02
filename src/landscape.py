@@ -98,6 +98,7 @@ def gradient2D(landscape,dist):
 
     image = createEmptyImage(extent=dist,resolution=0.1)
     angle_image = createEmptyImage(extent=dist,resolution=0.1)
+    elevation_image = createEmptyImage(extent=dist,resolution=0.1)
 
     for i in tqdm.tqdm(range(len(landscape))):
         point = landscape[i]
@@ -114,6 +115,7 @@ def gradient2D(landscape,dist):
         e,angle = getGradient(point,closest)
         image[row,col] = e
         angle_image[row,col] = angle
+        elevation_image[row,col] = point[2]
 
     # binarize image
     # mask = image < 1
@@ -124,7 +126,12 @@ def gradient2D(landscape,dist):
         image = cv2.dilate(image, np.ones((3,3),np.uint8), iterations=1)
         image = ndimage.gaussian_filter(image, sigma=1)
 
+        # multiply image by elevation
+        
+
         image = (image - image.min())/(image.max()-image.min())
+        
+
 
 
         image = 255*(1-image)
@@ -143,13 +150,16 @@ def gradient2D(landscape,dist):
 
     else:
         image = cv2.dilate(image, np.ones((3,3),np.uint8), iterations=1)
+        
+        elevation_image = windowMax(elevation_image,window_size=11)
 
-        image = (image - image.min())/(image.max()-image.min())
-        image = 255*(image)
-        image = ndimage.gaussian_filter(image, sigma=3)
+        # image = (image - image.min())/(image.max()-image.min())
+        # image = 255*(image)
+        # image = ndimage.gaussian_filter(image, sigma=3)
 
-        image = np.uint8(image)
-        plt.imshow(image)
+        # image = np.uint8(image)
+        plt.matshow(image)
+        plt.colorbar()
         plt.show()
 
         angle_image = windowMax(angle_image,window_size=3)
@@ -162,18 +172,6 @@ def gradient2D(landscape,dist):
         plt.colorbar()
         plt.show()
 
-        # print(cart2Im(0,0,[dist,dist],0.1))
-        # print(cart2Im(5,5,[dist,dist],0.1))
-        # print(cart2Im(5,-5,[dist,dist],0.1))
-        # print(cart2Im(-5,-5,[dist,dist],0.1))
-        # print(cart2Im(-5,5,[dist,dist],0.1))
-
-        # print(img2Cart(50,100,[dist,dist],0.1))
-        # print(img2Cart(100,150,[dist,dist],0.1))
-        # print(img2Cart(150,100,[dist,dist],0.1))
-        # print(img2Cart(100,50,[dist,dist],0.1))
-    
- 
 
 def filter_distance(landscape,distance=5):
     # convert to polar
@@ -216,5 +214,5 @@ def ouster_cb(filter_dist=5,skips=5):
         
 skips = [10]
 for skip in skips:
-    ouster_cb(filter_dist=50,skips=skip)
+    ouster_cb(filter_dist=60,skips=skip)
 # ouster_cb(filter_dist=5)
