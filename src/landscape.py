@@ -29,9 +29,27 @@ def getGradient(point,neighbors):
     gz = np.median(gz)
     gz = np.clip(gz,0,10)
 
+    theta_x = np.median(np.arctan(gx))
+    theta_y = np.median(np.arctan(gy))
+
+    angle = abs(max(theta_x,theta_y))
+    angle = min(angle,np.radians(30))
+
     # print(f"Point: {point} Neighbors: {neighbors} gx: {gx} gy: {gy} gz: {gz}")
 
-    return gz
+    return gz, angle
+
+def windowMax(image,window_size=3):
+    im_copy = image.copy()
+    for i in range(image.shape[0]):
+        for j in range(image.shape[1]):
+            if i < window_size or j < window_size or i > image.shape[0]-window_size or j > image.shape[1]-window_size:
+                im_copy[i,j] = image[i,j]
+                continue
+            im_copy[i,j] = np.max(image[i-window_size:i+window_size,j-window_size:j+window_size])
+
+    return im_copy
+   
 
 def img2Cart(
     row=None,
@@ -79,6 +97,7 @@ def gradient2D(landscape,dist):
     start = time.time()
 
     image = createEmptyImage(extent=dist,resolution=0.1)
+    angle_image = createEmptyImage(extent=dist,resolution=0.1)
 
     for i in tqdm.tqdm(range(len(landscape))):
         point = landscape[i]
@@ -90,10 +109,11 @@ def gradient2D(landscape,dist):
         # closest = getClosestN(landscape,point,n=5)
         closest_idx = closest[1][1:]
         closest = landscape[closest_idx]
-        getGradient(point,closest)
 
         row,col = cart2Im(cartX=point[0],cartY=point[1],extent=[dist,dist],resolution=0.1)
-        image[row,col] = getGradient(point,closest)
+        e,angle = getGradient(point,closest)
+        image[row,col] = e
+        angle_image[row,col] = angle
 
     # binarize image
     # mask = image < 1
@@ -105,6 +125,7 @@ def gradient2D(landscape,dist):
         image = ndimage.gaussian_filter(image, sigma=1)
 
         image = (image - image.min())/(image.max()-image.min())
+
 
         image = 255*(1-image)
         image = np.rot90(image,3)
@@ -118,6 +139,8 @@ def gradient2D(landscape,dist):
 
         plt.imshow(image)
         plt.show()
+
+
     else:
         image = cv2.dilate(image, np.ones((3,3),np.uint8), iterations=1)
 
@@ -127,6 +150,16 @@ def gradient2D(landscape,dist):
 
         image = np.uint8(image)
         plt.imshow(image)
+        plt.show()
+
+        angle_image = windowMax(angle_image,window_size=3)
+        # angle_image = (angle_image - angle_image.min())/(angle_image.max()-angle_image.min())
+        # angle_image = 255*angle_image
+
+        # angle_image = np.uint8(angle_image)
+        angle_image = np.degrees(angle_image)
+        plt.matshow(angle_image)
+        plt.colorbar()
         plt.show()
 
         # print(cart2Im(0,0,[dist,dist],0.1))

@@ -220,8 +220,8 @@ Z = []
 Xr,Yr,Zr = geodedic_to_ecef(center_lat,center_lon,ele[im_extent[4][0], im_extent[4][1]])
 T = compute_ecef_to_enu_transform(ex7_lat,ex7_lon)
 
-for i in tqdm(range(0,ele_masked.shape[0],5)):
-    for j in range(0,ele_masked.shape[1],5):
+for i in tqdm(range(0,ele_masked.shape[0],10)):
+    for j in range(0,ele_masked.shape[1],10):
         lat,lon = pixel2latlon(j,i,*gt)
         alt = ele_masked[i,j]
         
