@@ -386,7 +386,21 @@ def runSample(tiff=None):
 
     print(f"Test LLH: {test_llh}") 
 
-def validateCoords(coords,NW_coords=None,SE_coords=None):
+def validateCoords(coords,NW_coords=None,SE_coords=None,north_hemisphere=True,west_meridian=True):
+    '''
+    Validate if the coordinates are within the bounds
+
+    Args:
+    coords: numpy array of shape (N,3)
+    NW_coords: North-West coordinates
+    SE_coords: South-East coordinates
+
+    Returns:
+    None
+
+    Raises:
+    ValueError: If some coordinates are outside the bounds
+    '''
     lats = coords[:,0]
     lons = coords[:,1]
 
@@ -394,13 +408,23 @@ def validateCoords(coords,NW_coords=None,SE_coords=None):
     if NW_coords is None or SE_coords is None:
         raise ValueError("Please provide NW and SE coordinates")
 
-    lat_mask_1 = lats > NW_coords[0]
-    lat_mask_2 = lats < SE_coords[0]
-    lat_mask = np.logical_and(lat_mask_1,lat_mask_2)
+    if north_hemisphere:
+        lat_mask_1 = lats > NW_coords[0]
+        lat_mask_2 = lats < SE_coords[0]
+        lat_mask = np.logical_and(lat_mask_1,lat_mask_2)
+    else:
+        lat_mask_1 = lats < NW_coords[0]
+        lat_mask_2 = lats > SE_coords[0]
+        lat_mask = np.logical_and(lat_mask_1,lat_mask_2)
 
-    lon_mask_1 = lons < NW_coords[1]
-    lon_mask_2 = lons > SE_coords[1]
-    lon_mask = np.logical_and(lon_mask_1,lon_mask_2)
+    if west_meridian:
+        lon_mask_1 = lons < NW_coords[1]
+        lon_mask_2 = lons > SE_coords[1]
+        lon_mask = np.logical_and(lon_mask_1,lon_mask_2)
+    else:
+        lon_mask_1 = lons > NW_coords[1]
+        lon_mask_2 = lons < SE_coords[1]
+        lon_mask = np.logical_and(lon_mask_1,lon_mask_2)
 
     if np.any(lat_mask) or np.any(lon_mask):
         # print("Some coordinates are outside the bounds")
@@ -409,6 +433,17 @@ def validateCoords(coords,NW_coords=None,SE_coords=None):
     print("All coordinates are within the bounds")
 
 def wgs84_2ENU(coords,NW_coords=None,SE_coords=None):
+    '''
+    Converts WGS84 coordinates to ENU coordinates using interpolated center
+
+    Args:
+    coords: numpy array of shape (N,3)
+    NW_coords: North-West coordinates
+    SE_coords: South-East coordinates
+
+    Returns:
+    None
+    '''
     if NW_coords is None or SE_coords is None:
         raise ValueError("Please provide NW and SE coordinates")
     
@@ -461,6 +496,8 @@ def wgs84_2ENU(coords,NW_coords=None,SE_coords=None):
 
     
 if __name__ == "__main__":
+
+    # All assumptions are for North Hemisphere and West of Prime Meridian
 
     # Run Sample
     # runSample(tiff="space.tif")
