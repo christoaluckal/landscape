@@ -40,7 +40,7 @@ def latlon2pixel(lat, lon, gt):
     pixel_x = math.floor(pixel_coord[0])
     pixel_y = math.floor(pixel_coord[1])
 
-    return pixel_x, pixel_y
+    return pixel_y, pixel_x
 
 
 def printBounds(array):
@@ -225,11 +225,10 @@ def getData(tiff_file=None,max_extent=True,NW:list=None,SE:list=None):
     print("Min={:.3f}, Max={:.3f}".format(min,max))
 
     if band.GetOverviewCount() > 0:
-        print("Band has {} overviews".format(band.GetOverviewCount()))
+        print("Band has {} overviews\n".format(band.GetOverviewCount()))
 
     if band.GetRasterColorTable():
-        print("Band has a color table with {} entries".format(band.GetRasterColorTable().GetCount()))
-
+        print("Band has a color table with {} entries\n".format(band.GetRasterColorTable().GetCount()))
 
     ele = band.ReadAsArray()
     mask = ele < min
@@ -262,11 +261,32 @@ def getData(tiff_file=None,max_extent=True,NW:list=None,SE:list=None):
         SE_lat, SE_lon = pixel2latlon(latlon_extent[8][0], latlon_extent[8][1], geotransform)
         C_interp_lat, C_interp_lon = (NW_lat + SE_lat) / 2, (NW_lon + SE_lon) / 2
 
+        print("="*50)
+        print(f"WGS84 Coordinates")
+        print("="*50)
+        print(f"North-West: {NW_lat}, {NW_lon}")
+        print(f"Center: {C_lat}, {C_lon}")
+        print(f"South-East: {SE_lat}, {SE_lon}")
+
+
         # print(f"NW: {NW_lat}, {NW_lon}, {ele[im_extent[0][0], im_extent[0][1]]}")
         # print(f"C: {C_lat}, {C_lon}, {ele[im_extent[4][0], im_extent[4][1]]}")
         # print(f"C_i: {C_interp_lat}, {C_interp_lon}")
         # print(f"C Error: {C_lat-C_interp_lat}, {C_lon-C_interp_lon}")
         # print(f"SE: {SE_lat}, {SE_lon}, {ele[im_extent[8][0], im_extent[8][1]]}")
+
+        NW_px, NW_py = latlon2pixel(NW_lat, NW_lon, geotransform)
+        SE_px, SE_py = latlon2pixel(SE_lat, SE_lon, geotransform)
+        C_px, C_py = latlon2pixel(C_lat, C_lon, geotransform)
+
+        print("\n")
+        print("="*50)
+        print(f"Taking raw latlon and converting to pixel")
+        print("="*50)
+        print(f"Image: {ele_masked.shape}")
+        print(f"NW px: {NW_py}, {NW_px}")
+        print(f"C px: {C_py}, {C_px}")
+        print(f"SE px: {SE_py}, {SE_px}")
 
     else:
         NW_lat = NW[0]
@@ -288,6 +308,7 @@ def getData(tiff_file=None,max_extent=True,NW:list=None,SE:list=None):
 
     data = {
         "ele_masked": ele_masked,
+        "gt": geotransform,
         "im_extent": im_extent,
         "latlon_extent": latlon_extent,
         "NW": {"lat": NW_lat, "lon": NW_lon},
@@ -312,21 +333,19 @@ def runSample(tiff=None):
     if tiff is None:
         raise ValueError("Please provide a tiff file")
     
-    print(f"Running sample for {tiff}\n", "*"*50, "\n")
-
+    print("="*50)
+    print(f"Sample for {tiff}")
+    print("="*50)
     data_dict = getData(tiff_file=tiff,max_extent=True)
+
     ele = data_dict["ele_masked"]
     im_extent = data_dict["im_extent"]
     NW_lat, NW_lon = data_dict["NW"]["lat"], data_dict["NW"]["lon"]
     C_lat, C_lon = data_dict["C"]["lat"], data_dict["C"]["lon"]
     SE_lat, SE_lon = data_dict["SE"]["lat"], data_dict["SE"]["lon"]
+    gt = data_dict["gt"]
 
-    print("*"*50)
-
-    print(f"North-West: {NW_lat}, {NW_lon}")
-    print(f"Center: {C_lat}, {C_lon}")
-    print(f"South-East: {SE_lat}, {SE_lon}")
-
+    
 
     NW_X, NW_Y, NW_Z = geodetic2ECEF(NW_lat, NW_lon, ele[im_extent[0][0], im_extent[0][1]])
     C_X, C_Y, C_Z = geodetic2ECEF(C_lat, C_lon, ele[im_extent[4][0], im_extent[4][1]])
@@ -349,7 +368,7 @@ def runSample(tiff=None):
     C_x_local, C_y_local, C_z_local = p[1]
     SE_x_local, SE_y_local, SE_z_local = p[2]
 
-    print("*"*50)
+    
 
     # ENU to ECEF
     NW_ecef = enu2ECEF(np.array([NW_x_local, NW_y_local, NW_z_local]), C_lat, C_lon, [C_X, C_Y, C_Z])
@@ -359,7 +378,10 @@ def runSample(tiff=None):
     # print(f"NW ECEF: {NW_ecef}")
     # print(f"C ECEF: {C_ecef}")
     # print(f"SE ECEF: {SE_ecef}")
-
+    print("\n")
+    print("="*50)
+    print(f"ECEF Coordinates")
+    print("="*50)
     print(f"North-West ECEF: {NW_ecef}")
     print(f"Center ECEF: {C_ecef}")
     print(f"South-East ECEF: {SE_ecef}")
@@ -369,14 +391,20 @@ def runSample(tiff=None):
     C_llh = ecef2Geodetic(*C_ecef)
     SE_llh = ecef2Geodetic(*SE_ecef)
 
-    print("\nConverting raw ECEF to WGS84\n", "*"*50)
+    print("\n")
+    print("="*50)
+    print("Converting raw ECEF to WGS84")
+    print("="*50)
     print(f"North-West LLH: {NW_llh}")
     print(f"Center LLH: {C_llh}")
     print(f"South-East LLH: {SE_llh}")
 
-    print(f"\nConverting local (10,10)m to ECEF and LLH\n", "*"*50)
-    test_X, test_Y = 10, 10
-    test_Z = C_z_local
+    print("\n")
+    test_X, test_Y = 0, 0
+    test_Z = 0
+    print("="*50)
+    print(f"Converting local ({test_X},{test_Y})m to ECEF and LLH")
+    print("="*50)
 
     test_ecef = enu2ECEF(np.array([test_X, test_Y, test_Z]), C_lat, C_lon, [C_X, C_Y, C_Z])
 
@@ -384,7 +412,17 @@ def runSample(tiff=None):
 
     test_llh = ecef2Geodetic(*test_ecef)
 
-    print(f"Test LLH: {test_llh}") 
+    print(f"Test LLH: {test_llh}")
+
+    test_px, test_py = latlon2pixel(test_llh[0], test_llh[1], gt)
+
+    print(f"Test Pixel: {test_py}, {test_px}")
+
+    test_elev = ele[test_py, test_px]
+
+    test_llh_final = (test_llh[0], test_llh[1], test_elev)
+
+    print(f"Test LLH Final: {test_llh_final}")
 
 def validateCoords(coords,NW_coords=None,SE_coords=None,north_hemisphere=True,west_meridian=True):
     '''
@@ -484,13 +522,13 @@ def wgs84_2ENU(coords,NW_coords=None,SE_coords=None):
     # p = np.dot(delta,T.T)
 
 
-    print("*"*50)
+    print("="*50)
     print(f"Converted ENU coordinates")
 
     for i,j in zip(coords,p):
         print(f"WGS84: {i} -> ENU: {j}")
 
-    print("*"*50)
+    print("="*50)
 
     
 
@@ -518,11 +556,13 @@ if __name__ == "__main__":
 
     # wgs84_2ENU(coords,NW_coords=UB_NW,SE_coords=UB_SE)
 
-    print(f"Davis Hall Coordinates")
-    print("*"*50)
+    # print(f"Davis Hall Coordinates")
+    # print("="*50)
 
-    DAVIS = [43.00300, -78.78732]
+    # DAVIS = [43.00300, -78.78732]
 
-    coords = np.array([DAVIS])
+    # coords = np.array([DAVIS])
 
-    wgs84_2ENU(coords,NW_coords=UB_NW,SE_coords=UB_SE)
+    # wgs84_2ENU(coords,NW_coords=UB_NW,SE_coords=UB_SE)
+
+    runSample(tiff="space.tif")
