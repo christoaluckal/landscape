@@ -123,11 +123,12 @@ def gradient2D(landscape,dist):
     
 
     if nav2_flag:
-        image = cv2.dilate(image, np.ones((3,3),np.uint8), iterations=1)
-        image = ndimage.gaussian_filter(image, sigma=1)
+        image = cv2.dilate(image, np.ones((3,3),np.uint8), iterations=2)
+        image = ndimage.gaussian_filter(image, sigma=3)
 
         # multiply image by elevation
-        
+
+
 
         image = (image - image.min())/(image.max()-image.min())
         
@@ -135,12 +136,15 @@ def gradient2D(landscape,dist):
 
 
         image = 255*(1-image)
-        image = np.rot90(image,3)
+        # image = np.rot90(image,3)
 
 
-        mask = image > 245
+        mask = image > 250
         image[mask] = 255
         image[~mask] = 0
+
+        # image = cv2.dilate(image, np.ones((11,11),np.uint8), iterations=2)
+        image = ndimage.gaussian_filter(image, sigma=3)
         
         image = np.uint8(image)
 
@@ -149,7 +153,7 @@ def gradient2D(landscape,dist):
 
 
     else:
-        image = cv2.dilate(image, np.ones((3,3),np.uint8), iterations=1)
+        image = cv2.dilate(image, np.ones((3,3),np.uint8), iterations=3)
         
         elevation_image = windowMax(elevation_image,window_size=11)
 
@@ -171,6 +175,18 @@ def gradient2D(landscape,dist):
         plt.matshow(angle_image)
         plt.colorbar()
         plt.show()
+
+    cv2.imwrite("landscape.pgm",image)
+
+    yaml = map_templet.replace("IMAGE_PATH","landscape.pgm")
+    yaml = yaml.replace("IMAGE_RES","0.1")
+    yaml = yaml.replace("IMAGE_OX","-50")
+    yaml = yaml.replace("IMAGE_OY","-50")
+
+    with open("landscape.yaml","w") as f:
+        f.write(yaml)
+
+    cv2.imwrite("landscape.png",image)
 
 
 def filter_distance(landscape,distance=5):
@@ -214,5 +230,5 @@ def ouster_cb(filter_dist=5,skips=5):
         
 skips = [10]
 for skip in skips:
-    ouster_cb(filter_dist=60,skips=skip)
+    ouster_cb(filter_dist=50,skips=skip)
 # ouster_cb(filter_dist=5)

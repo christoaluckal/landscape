@@ -319,58 +319,58 @@ test_llh = xyz2llh(*test_ecef)
 print(f"Test LLH: {test_llh}")
 
 
-# ex1_lat, ex1_lon = pixel2latlon(latlon_extent[0][0], latlon_extent[0][1], *gt)
-# ex3_lat, ex3_lon = pixel2latlon(latlon_extent[2][0], latlon_extent[2][1], *gt)
-# ex7_lat, ex7_lon = pixel2latlon(latlon_extent[6][0], latlon_extent[6][1], *gt)
-# ex9_lat, ex9_lon = pixel2latlon(latlon_extent[8][0], latlon_extent[8][1], *gt)
-# center_lat, center_lon = pixel2latlon(latlon_extent[4][0], latlon_extent[4][1], *gt)
-# print(f"Center LatLon: {center_lat}, {center_lon}, {ele[im_extent[4][0], im_extent[4][1]]}")
+ex1_lat, ex1_lon = pixel2latlon(latlon_extent[0][0], latlon_extent[0][1], *gt)
+ex3_lat, ex3_lon = pixel2latlon(latlon_extent[2][0], latlon_extent[2][1], *gt)
+ex7_lat, ex7_lon = pixel2latlon(latlon_extent[6][0], latlon_extent[6][1], *gt)
+ex9_lat, ex9_lon = pixel2latlon(latlon_extent[8][0], latlon_extent[8][1], *gt)
+center_lat, center_lon = pixel2latlon(latlon_extent[4][0], latlon_extent[4][1], *gt)
+print(f"Center LatLon: {center_lat}, {center_lon}, {ele[im_extent[4][0], im_extent[4][1]]}")
 
-# res_x = gt[1]
-# res_y = gt[5]
+res_x = gt[1]
+res_y = gt[5]
 
-# X = []
-# Y = []
-# Z = []
+X = []
+Y = []
+Z = []
 
-# Xr,Yr,Zr = geodedic_to_ecef(center_lat,center_lon,ele[im_extent[4][0], im_extent[4][1]])
-# T = compute_ecef_to_enu_transform(ex7_lat,ex7_lon)
+Xr,Yr,Zr = geodedic_to_ecef(center_lat,center_lon,ele[im_extent[4][0], im_extent[4][1]])
+T = compute_ecef_to_enu_transform(ex7_lat,ex7_lon)
 
-# for i in tqdm(range(0,ele_masked.shape[0],10)):
-#     for j in range(0,ele_masked.shape[1],10):
-#         lat,lon = pixel2latlon(j,i,*gt)
-#         alt = ele_masked[i,j]
+for i in tqdm(range(0,ele_masked.shape[0],5)):
+    for j in range(0,ele_masked.shape[1],5):
+        lat,lon = pixel2latlon(j,i,*gt)
+        alt = ele_masked[i,j]
         
-#         Xp,Yp,Zp = geodedic_to_ecef(lat,lon,alt)
-#         X.append(Xp)
-#         Y.append(Yp)
-#         Z.append(Zp)
+        Xp,Yp,Zp = geodedic_to_ecef(lat,lon,alt)
+        X.append(Xp)
+        Y.append(Yp)
+        Z.append(Zp)
 
 
-# X = np.array(X)
-# Y = np.array(Y)
-# Z = np.array(Z)
+X = np.array(X)
+Y = np.array(Y)
+Z = np.array(Z)
 
-# delta = np.array([X-Xr,Y-Yr,Z-Zr])
-# p = np.dot(T,delta).T
+delta = np.array([X-Xr,Y-Yr,Z-Zr])
+p = np.dot(T,delta).T
 
-# point_tree = KDTree(p)
+point_tree = KDTree(p)
 
-# computeOrientation(point_tree)
-# # p = rotate(p,[90,0,0])
+computeOrientation(point_tree)
+# p = rotate(p,[90,0,0])
 
-# # reflect about Y axis
-# # p[:,2] = -p[:,2]
+# reflect about Y axis
+# p[:,2] = -p[:,2]
 
-# import pickle
+import pickle
 
-# with open('workspace.pkl', 'wb') as f:
-#     pickle.dump(p, f)
+with open('workspace.pkl', 'wb') as f:
+    pickle.dump(p, f)
 
-# import open3d as o3d
+import open3d as o3d
 
-# pcd = o3d.geometry.PointCloud()
-# pcd.points = o3d.utility.Vector3dVector(p)
+pcd = o3d.geometry.PointCloud()
+pcd.points = o3d.utility.Vector3dVector(p)
 
-# o3d.visualization.draw_geometries([pcd])
-# o3d.io.write_point_cloud("space_2.ply", pcd)
+o3d.visualization.draw_geometries([pcd])
+o3d.io.write_point_cloud("space_2.pcd", pcd)
