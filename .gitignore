@@ -163,3 +163,4 @@ cython_debug/
 src/space.ply
 src/space.tif
 src/space_2.ply
+src/workspace.pkl
