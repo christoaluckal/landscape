@@ -529,6 +529,7 @@ def wgs84_2ENU(coords,NW_coords=None,SE_coords=None):
         print(f"WGS84: {i} -> ENU: {j}")
 
     print("="*50)
+    print('\n'*3)
 
     
 
@@ -538,31 +539,32 @@ if __name__ == "__main__":
     # All assumptions are for North Hemisphere and West of Prime Meridian
 
     # Run Sample
-    # runSample(tiff="space.tif")
+    try:
+        runSample(tiff="space.tif")
+    except Exception as e:
+        print(f"Error: {e}")
 
-    # Random Coordinates
+    print('\n'*3)
+
+    # Random Coordinates centered on UB North Campus
     UB_NW = [43.01403, -78.80508]
     UB_SE = [42.98984, -78.76478]
 
-    # print(f"\nRandom Coordinates\n", "*"*50)
+    print("="*50)
+    print(f"Random Coordinates")
+    print("="*50)
+    num_points = 10
 
-    # num_points = 50
+    rand_lats = np.random.uniform(UB_NW[0],UB_SE[0],num_points)
+    rand_lons = np.random.uniform(UB_NW[1],UB_SE[1],num_points)
+    rand_alts = np.random.uniform(0,10,num_points)
+    coords = np.vstack((rand_lats,rand_lons,rand_alts)).T
+    wgs84_2ENU(coords,NW_coords=UB_NW,SE_coords=UB_SE)
 
-    # rand_lats = np.random.uniform(UB_NW[0],UB_SE[0],num_points)
-    # rand_lons = np.random.uniform(UB_NW[1],UB_SE[1],num_points)
-    # rand_alts = np.random.uniform(0,10,num_points)
-
-    # coords = np.vstack((rand_lats,rand_lons,rand_alts)).T
-
-    # wgs84_2ENU(coords,NW_coords=UB_NW,SE_coords=UB_SE)
-
-    # print(f"Davis Hall Coordinates")
-    # print("="*50)
-
-    # DAVIS = [43.00300, -78.78732]
-
-    # coords = np.array([DAVIS])
-
-    # wgs84_2ENU(coords,NW_coords=UB_NW,SE_coords=UB_SE)
-
-    runSample(tiff="space.tif")
+    # Davis Hall Coordinates
+    print("="*50)
+    print(f"Davis Hall")
+    print("="*50)
+    DAVIS = [43.00300, -78.78732]
+    coords = np.array([DAVIS])
+    wgs84_2ENU(coords,NW_coords=UB_NW,SE_coords=UB_SE)
