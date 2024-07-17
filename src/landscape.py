@@ -9,6 +9,7 @@ import time
 import cv2
 import sys
 import tqdm
+import argparse
 
 map_templet = '''
 image: IMAGE_PATH
@@ -19,23 +20,38 @@ free_thresh: 0.196
 negate: 0
 '''
 
-nav2_flag = bool(int(sys.argv[1]))
 
-def getGradient(point,neighbors):
+parser = argparse.ArgumentParser()
+parser.add_argument("--nav2", action="store_true", help="Use nav2")
+parser.add_argument("--max_gradient", type=int, help="Max gradient", default=10)
+parser.add_argument("--distance", type=int, help="Filter distance", default=50)
+parser.add_argument("--skips", type=int, help="Skip every n points", default=10)
+parser.add_argument("--resolution", type=float, help="Resolution (m/px) of the image", default=0.1)
+parser.add_argument("--elevation_filter", type=int, help="Elevation filter in Z", default=5)
+parser.add_argument("--polar_filter", type=int, help="Polar distance filter", default=2)
+parser.add_argument("--kd_neighbors", type=int, help="Number of neighbors for KDTree", default=30)
+parser.add_argument("--window_size", type=int, help="Window size for max filter", default=3)
+parser.add_argument("--sigma", type=int, help="Sigma for gaussian filter", default=3)
+parser.add_argument("--dilate_iterations", type=int, help="Number of dilate iterations", default=3)
+parser.add_argument("--dilation_size", type=int, help="Dilation size", default=3)
+parser.add_argument("--pkl_path", type=str, help="Path to pkl file", default="workspace.pkl")
+
+args = parser.parse_args()
+
+
+def getGradient(neighbors):
     gx = np.diff(neighbors[:,2]+1e-5)/(np.diff(neighbors[:,0])+1e-5)
     gy = np.diff(neighbors[:,2]+1e-5)/(np.diff(neighbors[:,1])+1e-5)
 
     gz = np.sqrt(gx**2 + gy**2)
     gz = np.median(gz)
-    gz = np.clip(gz,0,10)
+    gz = np.clip(gz,0,args.max_gradient)
 
     theta_x = np.median(np.arctan(gx))
     theta_y = np.median(np.arctan(gy))
 
     angle = abs(max(theta_x,theta_y))
     angle = min(angle,np.radians(30))
-
-    # print(f"Point: {point} Neighbors: {neighbors} gx: {gx} gy: {gy} gz: {gz}")
 
     return gz, angle
 
@@ -94,57 +110,42 @@ def gradient2D(landscape,dist):
     o3d.visualization.draw_geometries([pcd])
 
     landscape_tree = KDTree(landscape)
-    start = time.time()
 
-    image = createEmptyImage(extent=dist,resolution=0.1)
-    angle_image = createEmptyImage(extent=dist,resolution=0.1)
-    elevation_image = createEmptyImage(extent=dist,resolution=0.1)
+    image = createEmptyImage(extent=dist,resolution=args.resolution)
+    angle_image = createEmptyImage(extent=dist,resolution=args.resolution)
+    elevation_image = createEmptyImage(extent=dist,resolution=args.resolution)
 
     for i in tqdm.tqdm(range(len(landscape))):
         point = landscape[i]
         r = np.sqrt(point[0]**2 + point[1]**2 + point[2]**2)
-        if r < 2:
+        if r < args.polar_filter:
             continue
 
-        closest = landscape_tree.query(point,k=100)
-        # closest = getClosestN(landscape,point,n=5)
+        closest = landscape_tree.query(point,k=args.kd_neighbors)
         closest_idx = closest[1][1:]
         closest = landscape[closest_idx]
 
-        row,col = cart2Im(cartX=point[0],cartY=point[1],extent=[dist,dist],resolution=0.1)
-        e,angle = getGradient(point,closest)
+        row,col = cart2Im(cartX=point[0],cartY=point[1],extent=[dist,dist],resolution=args.resolution)
+        e,angle = getGradient(closest)
         image[row,col] = e
         angle_image[row,col] = angle
         elevation_image[row,col] = point[2]
 
-    # binarize image
-    # mask = image < 1
-    # image[mask] = 0
-    
+ 
 
-    if nav2_flag:
-        image = cv2.dilate(image, np.ones((3,3),np.uint8), iterations=2)
-        image = ndimage.gaussian_filter(image, sigma=3)
-
-        # multiply image by elevation
-
-
+    if args.nav2:
+        image = cv2.dilate(image, np.ones((args.dilation_size,args.dilation_size),np.uint8), iterations=args.dilate_iterations)
+        image = ndimage.gaussian_filter(image, sigma=args.sigma)
 
         image = (image - image.min())/(image.max()-image.min())
-        
-
-
-
         image = 255*(1-image)
-        # image = np.rot90(image,3)
 
-
-        mask = image > 250
+        mask = image > 240
         image[mask] = 255
         image[~mask] = 0
 
         # image = cv2.dilate(image, np.ones((11,11),np.uint8), iterations=2)
-        image = ndimage.gaussian_filter(image, sigma=3)
+        image = ndimage.gaussian_filter(image, sigma=args.sigma)
         
         image = np.uint8(image)
 
@@ -153,13 +154,10 @@ def gradient2D(landscape,dist):
 
 
     else:
-        image = cv2.dilate(image, np.ones((3,3),np.uint8), iterations=3)
+        image = cv2.dilate(image, np.ones((args.dilation_size,args.dilation_size),np.uint8), iterations=args.dilate_iterations)
         
-        elevation_image = windowMax(elevation_image,window_size=11)
+        elevation_image = windowMax(elevation_image,window_size=args.window_size)
 
-        # image = (image - image.min())/(image.max()-image.min())
-        # image = 255*(image)
-        # image = ndimage.gaussian_filter(image, sigma=3)
 
         # image = np.uint8(image)
         plt.matshow(image)
@@ -167,10 +165,7 @@ def gradient2D(landscape,dist):
         plt.show()
 
         angle_image = windowMax(angle_image,window_size=3)
-        # angle_image = (angle_image - angle_image.min())/(angle_image.max()-angle_image.min())
-        # angle_image = 255*angle_image
 
-        # angle_image = np.uint8(angle_image)
         angle_image = np.degrees(angle_image)
         plt.matshow(angle_image)
         plt.colorbar()
@@ -179,9 +174,9 @@ def gradient2D(landscape,dist):
     cv2.imwrite("landscape.pgm",image)
 
     yaml = map_templet.replace("IMAGE_PATH","landscape.pgm")
-    yaml = yaml.replace("IMAGE_RES","0.1")
-    yaml = yaml.replace("IMAGE_OX","-50")
-    yaml = yaml.replace("IMAGE_OY","-50")
+    yaml = yaml.replace("IMAGE_RES",f"{args.resolution}")
+    yaml = yaml.replace("IMAGE_OX",f"{-dist}")
+    yaml = yaml.replace("IMAGE_OY",f"{-dist}")
 
     with open("landscape.yaml","w") as f:
         f.write(yaml)
@@ -203,12 +198,15 @@ def filter_distance(landscape,distance=5):
 
     return landscape
 
-def ouster_cb(filter_dist=5,skips=5):
-    with open("workspace.pkl","rb") as f:
+def generateOccupancyFiles(filter_dist=50,skips=10):
+    # with open("workspace.pkl","rb") as f:
+    #     landscape = pickle.load(f)
+
+    with open(args.pkl_path,"rb") as f:
         landscape = pickle.load(f)
 
-    # remove all z values greater than 1
-    landscape = landscape[landscape[:,2] < 50]
+    # remove all z values greater than elevation filter
+    landscape = landscape[landscape[:,2] < args.elevation_filter]
 
     # get median z value
     min_z = np.median(landscape[:,2])
@@ -228,7 +226,6 @@ def ouster_cb(filter_dist=5,skips=5):
     print(f"Time:{gradient2D(landscape,filter_dist)}")
     print("*"*50,"\n")
         
-skips = [10]
-for skip in skips:
-    ouster_cb(filter_dist=50,skips=skip)
-# ouster_cb(filter_dist=5)
+
+if __name__ == "__main__":
+    generateOccupancyFiles(filter_dist=args.distance,skips=args.skips)
