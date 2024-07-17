@@ -1,13 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.ndimage as ndimage
-# from scipy.ndimage import gaussian_filter1d
-from numpy import convolve
 import pickle
 from scipy.spatial import KDTree
-import time
 import cv2
-import sys
 import tqdm
 import argparse
 

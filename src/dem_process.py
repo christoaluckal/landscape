@@ -1,10 +1,5 @@
 from osgeo import gdal
 import numpy as np
-import matplotlib.pyplot as plt
-import pyproj
-import pyproj.transformer
-from tqdm import tqdm
-from scipy.spatial import KDTree
 import math
 
 np.set_printoptions(suppress=True)
